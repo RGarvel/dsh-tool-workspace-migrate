@@ -107,6 +107,13 @@ dsh 本体自带，无需另行安装。两种方式改完都需**重启 `dsh we
 
 sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 做**密码学比对**确认（appId 取自各 profile 的 `im-qqbot` 配置），比对不上则回退反查 prefs 中指向源会话的键。迁移链可叠加：再次迁移同一对话会把键改指到最新的续接会话。注意 **bot 进程启动时缓存这两个文件，改完需重启宿主进程生效**（返回 `qq_channel.needs_restart: true` 即提示此事）。未装 qqbot、源会话无绑定、或解析不出 sessionKey 时均为无害的静默跳过；可用 `rebind_qq_channel: false` 显式关闭。
 
+### 查看与手动改绑：`list_qq_bindings` / `rebind_qq_channel`
+
+- `list_qq_bindings`（无参数）：只读返回 `bindings[]`（`session_key`→`session_id`，入站路由表）、`model_overrides[]`（各通道的模型偏好）、`peers[]`（出站镜像条目，含 `has_last_msg_id`）。
+- `rebind_qq_channel`：把某个 QQ 通道手动指到任意**已存在**的会话（目标 id 会先校验存在性）。必填 `session_id`；定位键可显式传 `session_key`，或给 `source_session_id`（当前绑定的会话）作提示，否则按"目标自身的绑定线索 → 唯一已知绑定"自动推断；推断有歧义时返回 `ambiguous-session-key` 并附 `known_bindings` 供重试。返回 `ok`、`session_key`、`previous_session_id`、`peers_seeded`、`needs_restart`。
+
+> ⚠️ 不要手改这两个 JSON 时用 PowerShell `Set-Content -Encoding UTF8`（PS 5.1 会写入 BOM，可能导致 bot 解析异常）；插件工具始终写无 BOM 的 UTF-8，读取侧也做了 BOM 容错。
+
 ## 限制与风险
 
 - **文件操作不走 shell 沙箱**：复制用进程内 `node:fs`，可写 dsh 进程能写的任意目录；这是迁移必须的，代价是**该插件是受信代码**，且只作用于显式传入的路径与源会话自身的 cwd。
@@ -114,6 +121,7 @@ sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 
 - **每个目标可能重复**：同一文件若被多条会话 `edit` 过，会出现在多份目标里。
 - **“带上下文继续”= 新会话**：产物是新 `sessionId`，源会话与被迁文件不被改动。`continuation_error` 非空表示种子会话建立失败（但文件已复制、工作区已登记、源会话已归档——可用取消归档找回）。
 - **归档只隐藏、不删**：`archiveSession` 仅追加到 `archivedSessionIds`，源目录与源日志原样保留；若想"迁完后清空源目录里已迁走的文件"，需要另一个显式清理动作，本工具不代做。
+- **改绑是文件级操作，运行中的旧进程会回写覆盖**：bot 启动时一次性读入 prefs/peers 缓存，未重启前它每次落盘都用**旧缓存**整体重写，可能冲掉刚补的条目（实测发生过：迁移写好的 peers 新条目被旧进程的回写抹掉）。改绑后应尽快重启宿主进程，重启前避免 QQ 收发。
 
 ## 开发与发布
 

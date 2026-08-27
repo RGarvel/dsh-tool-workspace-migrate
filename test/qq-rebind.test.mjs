@@ -5,7 +5,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { rebindQQChannel, deriveSessionId } from "../lib/qq-rebind.js";
+import { rebindQQChannel, setQQChannelBinding, deriveSessionId } from "../lib/qq-rebind.js";
 
 let failures = 0;
 const check = (label, cond) => { if (cond) console.log("ok  :", label); else { failures++; console.log("FAIL:", label); } };
@@ -74,6 +74,50 @@ const loadJson = (f) => JSON.parse(readFileSync(f, "utf8"));
   const p4 = fixture({ peers: { [src]: entry() }, withAppId: false });
   check("F1 unresolvable session key reported",
     rebindQQChannel({ sourceSessionId: src, continuationSessionId: "z", paths: p4 }).reason === "session-key-unresolved");
+}
+
+// G. manual switch after a migration chain: single-binding fallback + seed + idempotence
+{
+  const src = deriveSessionId(KEY);
+  const paths = fixture({ peers: { [src]: entry() } });
+  rebindQQChannel({ sourceSessionId: src, continuationSessionId: "session-A", paths });
+  const r = setQQChannelBinding({ targetSessionId: "session-B", paths });
+  check("G1 resolves single binding, reports previous",
+    r.ok === true && r.session_key === KEY && r.previous_session_id === "session-A" && r.peers_seeded === true);
+  check("G2 prefs repointed and peers seeded",
+    loadJson(paths.prefs).sessionIds[KEY] === "session-B" && loadJson(paths.peers)["session-B"]?.peerId === PEER);
+  const r2 = setQQChannelBinding({ targetSessionId: "session-B", paths });
+  check("G3 idempotent (already bound to target)", r2.ok === true && r2.previous_session_id === "session-B" && r2.peers_seeded === false);
+}
+
+// H. explicit sessionKey without any binding; seed via scope+peerId match; invalid key rejected
+{
+  const paths = fixture({ peers: { "session-OLD": entry() } });
+  const r = setQQChannelBinding({ targetSessionId: "session-T", sessionKey: KEY, paths });
+  check("H1 explicit key works, seeds from peerId match", r.ok === true && r.previous_session_id === void 0 && r.peers_seeded === true);
+  const bad = setQQChannelBinding({ targetSessionId: "session-T", sessionKey: "qqbot:x:bad:1", paths });
+  check("H2 invalid key rejected", bad.ok === false && bad.reason === "invalid-session-key");
+}
+
+// I/J. several bindings: ambiguous without hint, resolved with source hint
+{
+  const paths = fixture({
+    peers: { "session-P1": entry(), "session-P2": entry({ peerId: "OTHERPEER" }) },
+    prefs: { overrides: {}, sessionIds: { [KEY]: "session-P1", [`qqbot:${APPID}:group:G1`]: "session-P2" } },
+  });
+  const amb = setQQChannelBinding({ targetSessionId: "session-NEW", paths });
+  check("I1 ambiguous rejected with known bindings", amb.ok === false && amb.reason === "ambiguous-session-key" && amb.known_bindings.length === 2);
+  const hinted = setQQChannelBinding({ targetSessionId: "session-NEW", sourceSessionId: "session-P2", paths });
+  check("J1 source hint resolves intended key", hinted.ok === true && hinted.session_key === `qqbot:${APPID}:group:G1` && hinted.previous_session_id === "session-P2");
+}
+
+// K. UTF-8 BOM tolerance (PowerShell Set-Content style files)
+{
+  const src = deriveSessionId(KEY);
+  const paths = fixture({ peers: { [src]: entry() } });
+  writeFileSync(paths.peers, "\uFEFF" + readFileSync(paths.peers, "utf8"), "utf8");
+  check("K1 BOM-prefixed peers still parses",
+    rebindQQChannel({ sourceSessionId: src, continuationSessionId: "session-BOM", paths }).rebound === true);
 }
 
 console.log(failures === 0 ? "\n== ALL PASS ==" : `\n== ${failures} FAILURES ==`);
