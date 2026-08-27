@@ -20,9 +20,12 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
+    "lib",
     "cordis.patch.yml"
   ],
+  "scripts": {
+    "test": "node test/qq-rebind.test.mjs"
+  },
   "license": "MIT",
   "dsh": {
     "bundle": {

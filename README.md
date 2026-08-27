@@ -45,8 +45,9 @@ DSH 插件：工作区迁移，注册两个工具：
 | `extra_paths` | string[] | 否 | `[]` | 相对源目录、始终追加的文件/子目录 |
 | `carry_context` | boolean | 否 | `true` | 是否带历史种子在目标新建会话 |
 | `archive_source` | boolean | 否 | `true` | 迁移后是否归档源会话 |
+| `rebind_qq_channel` | boolean | 否 | `true` | 源会话绑定了 QQ 通道时，自动把通道改指到续接会话（见下节） |
 
-返回 `results[]`：每条的 `ok`、`source_path`/`target_path`、`workspace_id`、`copied_files`/`skipped_files`、`continuation_session_id`/`continuation_error`、`archived`。
+返回 `results[]`：每条的 `ok`、`source_path`/`target_path`、`workspace_id`、`copied_files`/`skipped_files`、`continuation_session_id`/`continuation_error`、`archived`，发生过 QQ 改绑（或改绑失败）时另有 `qq_channel`。
 
 ## 安装
 
@@ -96,6 +97,15 @@ dsh 本体自带，无需另行安装。两种方式改完都需**重启 `dsh we
 想"干净分割、只迁本对话产物"时，把 `copy_mode` 换成 `artifacts` 并用
 `extra_paths` 补齐 `node_modules`、`.git`、`.env` 等依赖——**但要明白
 `artifacts` 会丢掉"只读依赖 / shell 间接产物"，见下一条限制。**
+
+## QQ 通道自动重绑（@tencent-connect/dsh-qqbot）
+
+被迁移的会话若绑定了 QQ 通道（c2c/群聊），工具在建好续接会话后会自动改写两处映射，让 QQ 端接续迁移后的对话：
+
+- `~/.dsh-qqbot/model-prefs.json`：把该通道 sessionKey 的会话覆盖指向续接会话（入站路由）；
+- `~/.dsh-qqbot/session-peers.json`：为续接会话补登对端条目（Web 回合立即可镜像到 QQ）。
+
+sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 做**密码学比对**确认（appId 取自各 profile 的 `im-qqbot` 配置），比对不上则回退反查 prefs 中指向源会话的键。迁移链可叠加：再次迁移同一对话会把键改指到最新的续接会话。注意 **bot 进程启动时缓存这两个文件，改完需重启宿主进程生效**（返回 `qq_channel.needs_restart: true` 即提示此事）。未装 qqbot、源会话无绑定、或解析不出 sessionKey 时均为无害的静默跳过；可用 `rebind_qq_channel: false` 显式关闭。
 
 ## 限制与风险
 
