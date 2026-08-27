@@ -123,6 +123,28 @@ sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 
 - **归档只隐藏、不删**：`archiveSession` 仅追加到 `archivedSessionIds`，源目录与源日志原样保留；若想"迁完后清空源目录里已迁走的文件"，需要另一个显式清理动作，本工具不代做。
 - **改绑是文件级操作，运行中的旧进程会回写覆盖**：bot 启动时一次性读入 prefs/peers 缓存，未重启前它每次落盘都用**旧缓存**整体重写，可能冲掉刚补的条目（实测发生过：迁移写好的 peers 新条目被旧进程的回写抹掉）。改绑后应尽快重启宿主进程，重启前避免 QQ 收发。
 
+## 更新历史
+
+### v0.1.5 — 通道改绑一等工具化
+
+- 新增 `list_qq_bindings`（只读）：一屏看清入站路由表（`session_key`→`session_id`）、各通道模型偏好、出站镜像条目。
+- 新增 `rebind_qq_channel`：手动把 QQ 通道指到任意已存在会话（目标 id 先验证存在）。定位键支持显式 `session_key` / `source_session_id` 提示 / 目标自身绑定线索 / 唯一绑定兜底，歧义时返回 `ambiguous-session-key` 并列出候选；可复制的对端条目会自动补登。
+- JSON 读取兼容 UTF-8 BOM（规避 PowerShell `Set-Content` 的 BOM 坑），工具写入恒为无 BOM。
+- 「限制与风险」补充实测坑位：运行中的 bot 会用旧缓存整体回写两个映射文件，改绑后需尽快重启。
+
+### v0.1.4 — 输出 schema 修复
+
+- `migrate_workspace` 输出中的 `qq_channel` 由裸 `{"type":"object"}` 补全为完整声明（`additionalProperties: false` + 逐属性）。dsh 的 schema 方言要求 object 类型在**注册期**显式声明 `additionalProperties`，裸 object 会导致工具注册失败。
+- 该修复以真实 dsh-tools 做注册烟雾测试验证（4 工具注册通过）。
+
+### v0.1.3 — QQ 通道自动重绑（@tencent-connect/dsh-qqbot）
+
+- `migrate_workspace` 新增 `rebind_qq_channel` 参数（默认开）：迁移绑定了 QQ 通道的会话时，自动把通道映射改指到续接会话（写 prefs 入站覆盖 + 补 peers 出站条目），未绑定/未装 qqbot 时无害跳过；结果含 `qq_channel`（`needs_restart` 提示）。
+- sessionKey 解析优先 SHA-256 密码学比对（appId 扫描各 profile 的 `im-qqbot` 配置），回退 prefs 值反查；支持迁移链叠加。
+- 重绑逻辑独立为 `lib/qq-rebind.js`（纯 Node 依赖），新增 `npm test` 回归测试（纯 fixture，无外部依赖），发布 tarball 不含测试目录。
+
+> 0.1.3 之前为迁移工具本体的初始打磨（`list_workspace_sessions` / `migrate_workspace`、npm 化与兼容范围调整），未逐版记录。
+
 ## 开发与发布
 
 ```powershell
