@@ -1,0 +1,7 @@
+# The dsh-tool-workspace-migrate bundle patch: one insert row over the profile
+# root, mounting the `migrate_workspace` tool. Like the in-box tool-todo /
+# tool-goal rows, this registers into the host `tools` registry (process-global,
+# keyed by tool name) and needs no isolate realm.
+- insert:
+    - id: tool-workspace-migrate
+      name: '@garvel/dsh-tool-workspace-migrate'
