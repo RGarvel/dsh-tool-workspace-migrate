@@ -125,6 +125,11 @@ sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 
 
 ## 更新历史
 
+### v0.1.6 — 文档同步（行为零变更）
+
+- 0.1.5 发布时「更新历史」章节尚未入库，npm 首页缺失 changelog；本版仅让 README 文档随包重新上线。
+- 工具行为、schema、依赖与 v0.1.5 完全一致（测试基线同 commit 复跑通过）。
+
 ### v0.1.5 — 通道改绑一等工具化
 
 - 新增 `list_qq_bindings`（只读）：一屏看清入站路由表（`session_key`→`session_id`）、各通道模型偏好、出站镜像条目。
