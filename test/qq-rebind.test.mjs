@@ -39,7 +39,7 @@ const loadJson = (f) => JSON.parse(readFileSync(f, "utf8"));
   const prefs = loadJson(paths.prefs);
   check("A2 prefs override written", prefs.sessionIds[KEY] === "session-CONT-A");
   const peers = loadJson(paths.peers);
-  check("A3 peers seeded for continuation, source kept", peers["session-CONT-A"]?.peerId === PEER && peers[src] !== void 0);
+  check("A3 peers seeded for continuation, source removed (atomic transfer)", peers["session-CONT-A"]?.peerId === PEER && peers[src] === void 0);
   check("A4 chained rebind resolves through prefs value",
     rebindQQChannel({ sourceSessionId: "session-CONT-A", continuationSessionId: "session-CONT-B", paths }).rebound === true);
   check("A5 chain repoints to latest continuation", loadJson(paths.prefs).sessionIds[KEY] === "session-CONT-B");

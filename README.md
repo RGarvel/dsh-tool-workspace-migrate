@@ -103,7 +103,7 @@ dsh 本体自带，无需另行安装。两种方式改完都需**重启 `dsh we
 被迁移的会话若绑定了 QQ 通道（c2c/群聊），工具在建好续接会话后会自动改写两处映射，让 QQ 端接续迁移后的对话：
 
 - `~/.dsh-qqbot/model-prefs.json`：把该通道 sessionKey 的会话覆盖指向续接会话（入站路由）；
-- `~/.dsh-qqbot/session-peers.json`：为续接会话补登对端条目（Web 回合立即可镜像到 QQ）。
+- `~/.dsh-qqbot/session-peers.json`：为续接会话补登对端条目，并**删除同一对端（scope+peerId）的旧条目**——原子转移，一个 QQ 对端始终只保留一条映射（Web 回合立即可镜像到 QQ）。
 
 sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 做**密码学比对**确认（appId 取自各 profile 的 `im-qqbot` 配置），比对不上则回退反查 prefs 中指向源会话的键。迁移链可叠加：再次迁移同一对话会把键改指到最新的续接会话。注意 **bot 进程启动时缓存这两个文件，改完需重启宿主进程生效**（返回 `qq_channel.needs_restart: true` 即提示此事）。未装 qqbot、源会话无绑定、或解析不出 sessionKey 时均为无害的静默跳过；可用 `rebind_qq_channel: false` 显式关闭。
 
@@ -124,6 +124,12 @@ sessionKey 优先按 `SHA256("qqbot:<appId>:<scope>:<peerId>")` 与源会话 id 
 - **改绑是文件级操作，运行中的旧进程会回写覆盖**：bot 启动时一次性读入 prefs/peers 缓存，未重启前它每次落盘都用**旧缓存**整体重写，可能冲掉刚补的条目（实测发生过：迁移写好的 peers 新条目被旧进程的回写抹掉）。改绑后应尽快重启宿主进程，重启前避免 QQ 收发。
 
 ## 更新历史
+
+### v0.1.7 — 通道改绑改为「原子转移」（未发布）
+
+- 修复：`rebindQQChannel` / `setQQChannelBinding` 换绑时只补登新对端条目、从不删同对端（scope+peerId）旧条目，导致反复迁移/改绑后 `session-peers.json` 累积「同一 peer 挂着 N 个 sessionId」（`list_qq_bindings.peers` 出现多条同 peer）。
+- 现在补登新条目前先删同对端旧条目（一个对端始终只保留一条映射），改绑语义从「累加」变为「转移」。
+- 测试 `qq-rebind.test.mjs` 的 A3 断言由「source kept」改为「source removed」，21 项全绿。
 
 ### v0.1.6 — 文档同步（行为零变更）
 
